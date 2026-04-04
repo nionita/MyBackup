@@ -35,7 +35,7 @@ class GoogleDriveBackend(BackendBase):
         header = {"alg": "RS256", "typ": "JWT"}
         claim = {
             "iss": self.sa_creds["client_email"],
-            "scope": "https://www.googleapis.com/auth/drive.file", # Minimal scope
+            "scope": "https://www.googleapis.com/auth/drive",
             "aud": "https://oauth2.googleapis.com/token",
             "exp": now + 3600,
             "iat": now
@@ -105,8 +105,12 @@ class GoogleDriveBackend(BackendBase):
             method="POST"
         )
         
-        with urllib.request.urlopen(init_req) as response:
-            upload_url = response.headers.get("Location")
+        try:
+            with urllib.request.urlopen(init_req) as response:
+                upload_url = response.headers.get("Location")
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode('utf-8')
+            raise Exception(f"HTTP Error {e.code}: {err_body}")
             
         chunk_size = 10 * 1024 * 1024  # 10MB Chunks
         
