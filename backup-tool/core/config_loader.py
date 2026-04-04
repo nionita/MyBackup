@@ -114,7 +114,12 @@ def load_job_configs(config_dir="config"):
     check_permissions(jobs_dir)
             
     for filename in os.listdir(jobs_dir):
-        if filename.startswith("job_") and filename.endswith(".json"):
+        if filename.endswith(".json"):
+            if not filename.startswith("job_"):
+                import logging
+                logging.getLogger("backup").warning(f"File '{filename}' ignored: job files must start with 'job_' prefix")
+                continue
+                
             job_name = filename[4:-5]
             filepath = os.path.join(jobs_dir, filename)
             check_permissions(filepath)
@@ -126,6 +131,8 @@ def load_job_configs(config_dir="config"):
                     raise ConfigError(f"Invalid JSON in {filepath}: {e}")
                     
             if data.get("enabled", True) is False:
+                import logging
+                logging.getLogger("backup").info(f"Skipping job '{job_name}' because 'enabled' is false.")
                 continue
                 
             data = resolve_env_vars(data)
