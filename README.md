@@ -33,6 +33,10 @@ A cross-platform backup utility written entirely in Python (>= 3.12) using only 
 3. **IAM User**: Create an IAM user and generate Access Keys manually. Apply a policy that allows this user to assume the role `sts:AssumeRole`. 
    If you aren't using the AssumeRole strategy, simply assign the S3 permissions directly to the user (Option A).
 
+## Google Drive Backend Setup
+
+For Google Drive integrations via OAuth2 Server-to-Server Service Accounts utilizing our custom RS256 signature algorithm constraints, please refer to the dedicated [GDRIVE_SETUP_GUIDE.md](GDRIVE_SETUP_GUIDE.md) document for a complete step-by-step setup walkthrough.
+
 ## Configuring a Backup Job
 
 Jobs are configured in `backup-tool/config/jobs/`. Create a JSON file (e.g., `job_webserver.json`):

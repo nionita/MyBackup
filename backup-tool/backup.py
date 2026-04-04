@@ -3,7 +3,7 @@ import argparse
 import logging
 from core import platform_utils, config_loader, logging_setup
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 def get_parser():
     parser = argparse.ArgumentParser(description="Backup-Tool CLI")

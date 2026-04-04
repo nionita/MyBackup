@@ -52,9 +52,6 @@ def run_job(job_config: dict) -> bool:
         
         for b_conf in job_config.get("backends", []):
             b_type = b_conf.get("backend_type")
-            if b_type == "google_drive":
-                logger.warning(f"[{b_type}] Google Drive backend is postponed. Skipping.")
-                continue
                 
             try:
                 backend = instantiate_backend(job_config, b_conf)
@@ -97,9 +94,6 @@ def run_retention_only(job_config: dict):
     
     for b_conf in job_config.get("backends", []):
         b_type = b_conf.get("backend_type")
-        if b_type == "google_drive":
-            logger.warning(f"[{b_type}] Google Drive backend is postponed. Skipping.")
-            continue
             
         try:
             backend = instantiate_backend(job_config, b_conf)
