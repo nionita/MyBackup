@@ -1,0 +1,27 @@
+{
+  "name": "sample",
+  "description": "Template backup job",
+  "enabled": false,
+  "sources": [
+    "/path/to/backup"
+  ],
+  "exclude_patterns": [
+    "*.pyc",
+    "__pycache__"
+  ],
+  "archive": {
+    "format": "tar.gz",
+    "compression_level": 6
+  },
+  "backends": [
+    {
+      "backend_type": "aws_s3",
+      "aws_access_key_id": "$ENV:AWS_ACCESS_KEY_ID",
+      "aws_secret_access_key": "$ENV:AWS_SECRET_ACCESS_KEY",
+      "aws_region": "eu-central-1",
+      "aws_bucket": "my-backup-bucket",
+      "aws_prefix": "backups/sample/",
+      "retention_count": 5
+    }
+  ]
+}

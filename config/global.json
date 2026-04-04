@@ -1,0 +1,8 @@
+{
+  "version": "1.0",
+  "log_level": "INFO",
+  "log_file": "logs/backup.log",
+  "log_max_bytes": 10485760,
+  "log_backup_count": 5,
+  "temp_dir": null
+}
