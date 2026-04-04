@@ -1,12 +1,14 @@
 import urllib.request
 import urllib.parse
 import json
+import secrets
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
 
 class OAuthCallbackHandler(BaseHTTPRequestHandler):
     auth_code = None
+    expected_state = None
     
     def do_GET(self):
         # Extract the query parameters
@@ -14,6 +16,14 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
         query_params = urllib.parse.parse_qs(parsed_path.query)
         
         if 'code' in query_params:
+            # Verify CSRF state parameter before accepting the code
+            received_state = query_params.get('state', [None])[0]
+            if received_state != OAuthCallbackHandler.expected_state:
+                self.send_response(403)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                self.wfile.write(b"State mismatch - possible CSRF attack. Authentication rejected.")
+                return
             OAuthCallbackHandler.auth_code = query_params['code'][0]
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
@@ -46,8 +56,11 @@ def run_local_auth_flow(client_id: str, client_secret: str, port: int = 8080) ->
     """
     redirect_uri = f"http://localhost:{port}/"
     
-    # 1. Start the HTTP server in a daemon thread so it doesn't block
-    server_address = ('', port)
+    # Generate a cryptographic state token to prevent CSRF attacks
+    csrf_state = secrets.token_urlsafe(32)
+    
+    # 1. Start the HTTP server bound to loopback ONLY (not 0.0.0.0)
+    server_address = ('127.0.0.1', port)
     from socket import error as SocketError
     try:
         httpd = HTTPServer(server_address, OAuthCallbackHandler)
@@ -55,6 +68,7 @@ def run_local_auth_flow(client_id: str, client_secret: str, port: int = 8080) ->
         raise Exception(f"Failed to securely bind to port {port}. Is another application blocking it? Try using the --port flag. Error: {e}")
         
     OAuthCallbackHandler.auth_code = None
+    OAuthCallbackHandler.expected_state = csrf_state
     
     server_thread = threading.Thread(target=httpd.handle_request)
     server_thread.daemon = True
@@ -68,7 +82,8 @@ def run_local_auth_flow(client_id: str, client_secret: str, port: int = 8080) ->
         "response_type=code&"
         "scope=https://www.googleapis.com/auth/drive&"
         "access_type=offline&"
-        "prompt=consent"
+        "prompt=consent&"
+        f"state={csrf_state}"
     )
     
     print("\n" + "="*60)

@@ -102,7 +102,6 @@ def sign_pure_python(payload: bytes, private_key_pem: str) -> bytes:
     return s.to_bytes(n_len, 'big')
 
 def sign_openssl(payload: bytes, private_key_pem: str) -> bytes:
-    import tempfile
     import shutil
     
     openssl_exe = shutil.which("openssl")
@@ -111,12 +110,27 @@ def sign_openssl(payload: bytes, private_key_pem: str) -> bytes:
         
     if not openssl_exe:
         raise FileNotFoundError("openssl missing")
-        
-    with tempfile.NamedTemporaryFile(mode='w', delete=False) as key_file:
-        key_file.write(private_key_pem)
-        key_path = key_file.name
-        
+    
+    # Pipe the private key via stdin to avoid writing secrets to disk.
+    # OpenSSL reads the key from fd 3 via the engine /dev/fd/3 on Linux,
+    # but on Windows this isn't available. We use a two-step approach:
+    # 1. Feed both key and payload through a single subprocess call using stdin.
+    # We use "-sign /dev/stdin" with the key passed via a process substitution,
+    # but the simplest cross-platform approach is to still use a temp file
+    # with restricted permissions and immediate cleanup.
+    import tempfile
+    
+    # Create with restricted permissions from the start (not world-readable)
+    fd = os.open(
+        os.path.join(tempfile.gettempdir(), f"backup_rsa_{os.getpid()}.tmp"),
+        os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+        0o600
+    )
+    key_path = os.path.join(tempfile.gettempdir(), f"backup_rsa_{os.getpid()}.tmp")
     try:
+        os.write(fd, private_key_pem.encode("utf-8"))
+        os.close(fd)
+        
         result = subprocess.run(
             [openssl_exe, "dgst", "-sha256", "-sign", key_path],
             input=payload,

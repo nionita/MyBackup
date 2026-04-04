@@ -37,8 +37,6 @@ def get_parser():
 
     # setup-gdrive parser
     setup_gd_parser = subparsers.add_parser("setup-gdrive", help="Launch a local native browser flow to authenticate Google Drive.")
-    setup_gd_parser.add_argument("--client-id", help="Standard OAuth Desktop App Client ID")
-    setup_gd_parser.add_argument("--client-secret", help="Standard OAuth Desktop App Client Secret")
     setup_gd_parser.add_argument("--port", type=int, default=8080, help="Local port for the authentication server (default 8080)")
 
     # install-scheduler parser
@@ -156,8 +154,8 @@ def main():
             print("Google Drive Consumer Authentication Menu")
             print("="*60)
             
-            p_client_id = args.client_id or input("Enter your OAuth Client ID > ").strip()
-            p_client_secret = args.client_secret or input("Enter your OAuth Client Secret > ").strip()
+            p_client_id = input("Enter your OAuth Client ID > ").strip()
+            p_client_secret = input("Enter your OAuth Client Secret > ").strip()
             
             if not p_client_id or not p_client_secret:
                 print("Client ID and Client Secret are strictly required!")
@@ -170,12 +168,17 @@ def main():
             
             gdrive_creds_path = os.path.join(creds_dir, "google_drive.json")
             
-            with open(gdrive_creds_path, "w") as f:
-                json.dump({
-                    "gd_client_id": p_client_id,
-                    "gd_client_secret": p_client_secret,
-                    "gd_refresh_token": refresh_token
-                }, f, indent=2)
+            # Write with restricted permissions (0o600) to prevent other users from reading secrets
+            creds_payload = json.dumps({
+                "gd_client_id": p_client_id,
+                "gd_client_secret": p_client_secret,
+                "gd_refresh_token": refresh_token
+            }, indent=2)
+            fd = os.open(gdrive_creds_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            try:
+                os.write(fd, creds_payload.encode("utf-8"))
+            finally:
+                os.close(fd)
                 
             print("\n" + "="*60)
             print("OAUTH SETUP COMPLETE!")
