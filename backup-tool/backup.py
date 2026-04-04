@@ -35,6 +35,12 @@ def get_parser():
     # setup parser
     subparsers.add_parser("setup", help="Scaffolds a fresh configuration directory (with jobs/ folders and a global.json skeleton) at your specified --config-dir.")
 
+    # setup-gdrive parser
+    setup_gd_parser = subparsers.add_parser("setup-gdrive", help="Launch a local native browser flow to authenticate Google Drive.")
+    setup_gd_parser.add_argument("--client-id", help="Standard OAuth Desktop App Client ID")
+    setup_gd_parser.add_argument("--client-secret", help="Standard OAuth Desktop App Client Secret")
+    setup_gd_parser.add_argument("--port", type=int, default=8080, help="Local port for the authentication server (default 8080)")
+
     # install-scheduler parser
     install_parser = subparsers.add_parser("install-scheduler", help="Registers a scheduled Task/Cron background worker mapping to these configurations.")
     install_group = install_parser.add_mutually_exclusive_group(required=True)
@@ -92,6 +98,7 @@ def main():
                 print(f"- {j['name']} ({len(j['sources'])} sources, {len(j['backends'])} backends)")
                 
         elif args.command == "run":
+            creds = config_loader.load_backend_credentials(args.config_dir)
             jobs = config_loader.load_job_configs(args.config_dir)
             if args.job:
                 jobs = [j for j in jobs if j["name"] == args.job]
@@ -102,7 +109,7 @@ def main():
             from core import job_runner
             success_count = 0
             for job in jobs:
-                if job_runner.run_job(job):
+                if job_runner.run_job(job, creds):
                     success_count += 1
                     
             global_logger.info(f"All jobs completed. {success_count} successful, {len(jobs) - success_count} failed.")
@@ -110,6 +117,7 @@ def main():
                 sys.exit(1)
 
         elif args.command == "cleanup":
+            creds = config_loader.load_backend_credentials(args.config_dir)
             jobs = config_loader.load_job_configs(args.config_dir)
             job = next((j for j in jobs if j["name"] == args.job), None)
             if not job:
@@ -117,7 +125,7 @@ def main():
                 sys.exit(1)
                 
             from core import job_runner
-            job_runner.run_retention_only(job)
+            job_runner.run_retention_only(job, creds)
             
         elif args.command == "setup":
             import os
@@ -138,6 +146,43 @@ def main():
                 print(f"Created Global config locally: {global_path}")
             
             print(f"-- Setup Finished --\nYour active workspace scaffolding is mapped at: {os.path.abspath(args.config_dir)}")
+            
+        elif args.command == "setup-gdrive":
+            import os
+            import json
+            from core import gdrive_auth
+            
+            print("\n" + "="*60)
+            print("Google Drive Consumer Authentication Menu")
+            print("="*60)
+            
+            p_client_id = args.client_id or input("Enter your OAuth Client ID > ").strip()
+            p_client_secret = args.client_secret or input("Enter your OAuth Client Secret > ").strip()
+            
+            if not p_client_id or not p_client_secret:
+                print("Client ID and Client Secret are strictly required!")
+                sys.exit(1)
+                
+            refresh_token = gdrive_auth.run_local_auth_flow(p_client_id, p_client_secret, args.port)
+            
+            creds_dir = os.path.join(args.config_dir, "credentials")
+            os.makedirs(creds_dir, exist_ok=True)
+            
+            gdrive_creds_path = os.path.join(creds_dir, "google_drive.json")
+            
+            with open(gdrive_creds_path, "w") as f:
+                json.dump({
+                    "gd_client_id": p_client_id,
+                    "gd_client_secret": p_client_secret,
+                    "gd_refresh_token": refresh_token
+                }, f, indent=2)
+                
+            print("\n" + "="*60)
+            print("OAUTH SETUP COMPLETE!")
+            print(f"A permanent refresh_token mapped to your Consumer Identity has been successfully generated.")
+            print(f"It is securely saved alongside your Client IDs at: {gdrive_creds_path}")
+            print("When defining a Job, simple add '\"backend_type\": \"google_drive\"' and it will dynamically pull these secure tokens at runtime.")
+            print("="*60 + "\n")
             
         elif args.command in ["install-scheduler", "uninstall-scheduler"]:
             if not platform_utils.is_windows():

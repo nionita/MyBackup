@@ -12,17 +12,31 @@ from core import rsa_signer
 class GoogleDriveBackend(BackendBase):
     def __init__(self, job_config: dict, backend_config: dict):
         super().__init__(job_config, backend_config)
-        self.service_account_file = self.backend_config.get("gd_service_account_file")
         self.folder_id = self.backend_config.get("gd_folder_id")
         self.force_pure_python = self.backend_config.get("gd_force_pure_python_rsa", False)
         
-        if not self.service_account_file or not os.path.exists(self.service_account_file):
-            raise ValueError(f"Google Drive service account JSON file missing: {self.service_account_file}")
+        # Scenario A: Service account integration (Enterprise/Workspace)
+        self.service_account_file = self.backend_config.get("gd_service_account_file")
+        
+        # Scenario B: Consumer OAuth integration (Refresh tokens bypass storage quotas)
+        self.client_id = self.backend_config.get("gd_client_id")
+        self.client_secret = self.backend_config.get("gd_client_secret")
+        self.refresh_token = self.backend_config.get("gd_refresh_token")
+        
         if not self.folder_id:
             raise ValueError("Google Drive target Folder ID (gd_folder_id) is missing")
             
-        with open(self.service_account_file, "r") as f:
-            self.sa_creds = json.load(f)
+        # Determine authentication methodology based on provided configuration keys
+        if self.refresh_token:
+            if not self.client_id or not self.client_secret:
+                raise ValueError("When using 'gd_refresh_token', you must also provide 'gd_client_id' and 'gd_client_secret'.")
+        elif self.service_account_file:
+            if not os.path.exists(self.service_account_file):
+                raise ValueError(f"Google Drive service account JSON file missing: {self.service_account_file}")
+            with open(self.service_account_file, "r") as f:
+                self.sa_creds = json.load(f)
+        else:
+            raise ValueError("Google Drive backend requires either a 'gd_service_account_file' OR a valid 'gd_refresh_token' mapping.")
             
         self.access_token = None
         self.token_expiry = 0
@@ -59,12 +73,21 @@ class GoogleDriveBackend(BackendBase):
         if time.time() < self.token_expiry - 60 and self.access_token:
             return
             
-        jwt_token = self._generate_jwt()
-        
-        data = urllib.parse.urlencode({
-            "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
-            "assertion": jwt_token
-        }).encode("utf-8")
+        # Scenario B: OAuth User Consent Refresh Flow
+        if self.refresh_token:
+            data = urllib.parse.urlencode({
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+                "refresh_token": self.refresh_token,
+                "grant_type": "refresh_token"
+            }).encode("utf-8")
+        else:
+            # Scenario A: RSA Service Account JWT Flow
+            jwt_token = self._generate_jwt()
+            data = urllib.parse.urlencode({
+                "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                "assertion": jwt_token
+            }).encode("utf-8")
         
         req = urllib.request.Request(
             "https://oauth2.googleapis.com/token", 

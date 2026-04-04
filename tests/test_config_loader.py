@@ -85,5 +85,44 @@ class TestConfigLoader(unittest.TestCase):
         self.assertEqual(len(jobs), 1)
         self.assertEqual(jobs[0]["name"], "test_job")
 
+    def test_load_backend_credentials(self):
+        creds_dir = os.path.join(self.config_dir, "credentials")
+        os.makedirs(creds_dir, exist_ok=True)
+        
+        # Mock global credential
+        gd_creds = {
+            "gd_client_id": "GLOBAL_ID",
+            "gd_client_secret": "GLOBAL_SECRET",
+            "gd_refresh_token": "GLOBAL_TOKEN"
+        }
+        with open(os.path.join(creds_dir, "google_drive.json"), "w") as f:
+            json.dump(gd_creds, f)
+            
+        creds = config_loader.load_backend_credentials(self.config_dir)
+        self.assertIn("google_drive", creds)
+        self.assertEqual(creds["google_drive"]["gd_client_id"], "GLOBAL_ID")
+        
+        # Test instantiation merging
+        from core import job_runner
+        
+        job_config = {"name": "test_job"}
+        # Backend defines local overrides
+        backend_config = {
+            "backend_type": "google_drive",
+            "gd_folder_id": "LOCAL_FOLDER",
+            # Intentionally overriding a global constraint to test override priority
+            "gd_client_id": "OVERRIDDEN_ID"
+        }
+        
+        # Passing mock credential array into instantiator to mock job_runner natively
+        combined_backend = job_runner.instantiate_backend(job_config, backend_config, creds)
+        
+        # Assert local configs took priority
+        self.assertEqual(combined_backend.client_id, "OVERRIDDEN_ID")
+        # Assert global configs passed down correctly
+        self.assertEqual(combined_backend.refresh_token, "GLOBAL_TOKEN")
+        # Assert local unique configs persist
+        self.assertEqual(combined_backend.folder_id, "LOCAL_FOLDER")
+
 if __name__ == '__main__':
     unittest.main()

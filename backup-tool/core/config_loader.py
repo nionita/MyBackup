@@ -140,3 +140,37 @@ def load_job_configs(config_dir="config"):
             jobs.append(data)
             
     return jobs
+
+def load_backend_credentials(config_dir="config"):
+    """Loads decentralized credential layers securely out of config_dir/credentials directory."""
+    creds = {}
+    creds_dir = os.path.join(config_dir, "credentials")
+    if not os.path.exists(creds_dir):
+        return creds
+        
+    for filename in os.listdir(creds_dir):
+        if filename.endswith(".json"):
+            backend_id = filename[:-5]
+            filepath = os.path.join(creds_dir, filename)
+            
+            # Warn if credentials layout is left world-readable 
+            if platform_utils.is_linux():
+                try:
+                    st = os.stat(filepath)
+                    import stat
+                    if stat.S_IROTH & st.st_mode:
+                        import logging
+                        logging.getLogger("backup").warning(f"Credential {filepath} is world-readable! Consider chmod 600.")
+                except Exception:
+                    pass
+            
+            with open(filepath, "r", encoding="utf-8") as f:
+                try:
+                    data = json.load(f)
+                except json.JSONDecodeError as e:
+                    raise ConfigError(f"Invalid JSON in {filepath}: {e}")
+                    
+            data = resolve_env_vars(data)
+            creds[backend_id] = data
+            
+    return creds
