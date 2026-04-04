@@ -100,4 +100,28 @@ Now we create the technical user that the backup script uses locally on the mach
 4. Choose **Befehlszeilenschnittstelle (CLI)** (Command Line Interface).
 5. Download or copy the **Access Key** and **Secret Access Key**. 
 
-These two keys, along with the Role ARN, are what you provide to the Backup Tool in the JSON configuration files!
+## 3. Configure the Backup Tool
+Because the tool uses a decentralized credentials architecture, your keys don't clutter up your job backups. 
+
+Instead, locally navigate to your configurations directory and create `<config-dir>/credentials/aws_s3.json`. Paste the keys you generated as follows:
+
+```json
+{
+  "aws_access_key_id": "YOUR_ACCESS_KEY_ID_HERE",
+  "aws_secret_access_key": "YOUR_SECRET_ACCESS_KEY_HERE",
+  "aws_region": "eu-central-1",
+  "aws_bucket": "my-backup-bucket",
+  "aws_assume_role_arn": "arn:aws:iam::YOUR_ACCOUNT_ID:role/MyBackupToolRole"
+}
+```
+*(You can also use the variable `"$ENV:AWS_ACCESS_KEY_ID"` if you prefer keeping these strings directly in your machine's environment variables instead!)*
+
+Then, in any job where you want AWS S3 backing, you simply reference the generic backend block:
+```json
+  "backends": [
+    {
+      "backend_type": "aws_s3",
+      "retention_count": 5
+    }
+  ]
+```

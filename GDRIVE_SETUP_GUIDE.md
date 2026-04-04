@@ -19,7 +19,7 @@ To bypass this without creating a Google Workspace, you must authenticate the sc
 7. A window will pop up containing your `Client ID` and `Client Secret`. Keep this open!
 
 **Step 2: Generate the Refresh Token**
-We have built a native Auto-Authenticator into the CLI that will automatically handle the Google OAuth handshakes for you!
+We have built a native Auto-Authenticator into the CLI that will automatically handle the Google OAuth handshakes for you.
 Simply execute:
 ```powershell
 python backup-tool/backup.py setup-gdrive
@@ -27,6 +27,8 @@ python backup-tool/backup.py setup-gdrive
 1. It will prompt you for the `Client ID` and `Client Secret` you just generated.
 2. It will spin up a local web server and launch your browser.
 3. Once you click "Allow", it physically catches the redirect, generates the token natively, and writes everything centrally to `<config-dir>\credentials\google_drive.json`.
+
+*(Note: **Headless Server Workaround** - Because Google formally banned headless server copying functionality in 2022, if you want this to run on a Linux proxy or headless server without a visual browser, you must run `python backup.py setup-gdrive` on your physical laptop first! Once the CLI spits out the `google_drive.json` mapping, simply upload that generated file to your headless server. Because the tokens are permanent, the server will assume your identity securely without ever requiring a browser component!)*
 
 **Step 3: Define your Backup Job**
 Because your credentials are now stored centrally, your `jobs/job_....json` mapping becomes beautifully clean! You simply reference the backend type and define your unique folder:
