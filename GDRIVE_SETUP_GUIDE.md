@@ -12,7 +12,7 @@ To bypass this without creating a Google Workspace, you must authenticate the sc
 **Step 1: Get an OAuth Client ID**
 1. Go to your [Google Cloud Console](https://console.cloud.google.com/) and ensure the **Google Drive API** is enabled.
 2. Go to **APIs & Services** -> **OAuth consent screen** (OAuth-Zustimmungsbildschirm). Select **External** and fill in required fake details. 
-3. **CRITICAL STEP:** While still on the OAuth Consent Screen, you must either click **Publish App** (App veröffentlichen) to remove testing limits, OR scroll down to **Test users** and manually add your specific `@gmail.com` email address. If you do not do this, Google will block your login attempt!
+3. **CRITICAL STEP:** While still on the OAuth Consent Screen, you must click **Publish App** (App veröffentlichen) to push the app into "In Production". **DO NOT leave it in "Testing" mode!** If left in Testing mode, your refresh token will forcefully expire every 7 days and backups will suddenly fail with an `invalid_grant` error.
 4. Go to **APIs & Services** -> **Credentials**.
 5. Click **+ CREATE CREDENTIALS** -> **OAuth client ID**.
 6. Select Application Type: **Desktop app**. Name it "Backup-Tool", click Create.
@@ -26,7 +26,10 @@ python backup-tool/backup.py setup-gdrive
 ```
 1. It will prompt you for the `Client ID` and `Client Secret` you just generated.
 2. It will spin up a local web server and launch your browser.
-3. Once you click "Allow", it physically catches the redirect, generates the token natively, and writes everything centrally to `<config-dir>\credentials\google_drive.json`.
+3. **Important:** Because you published the app but didn't submit it to Google for a formal security audit (which isn't needed for personal scripts), Google will show a big red warning: **"Google hasn't verified this app" (Google hat diese App nicht überprüft)**. 
+   - To bypass this: Click on **Advanced (Erweitert)** at the bottom left.
+   - Then click on **Go to Backup-Tool (unsafe) / Weiter zu Backup-Tool (unsicher)**.
+4. Once you click "Allow" on the final permissions screen, it physically catches the redirect, generates the token natively, and writes everything centrally to `<config-dir>\credentials\google_drive.json`.
 
 *(Note: **Headless Server Workaround** - Because Google formally banned headless server copying functionality in 2022, if you want this to run on a Linux proxy or headless server without a visual browser, you must run `python backup.py setup-gdrive` on your physical laptop first! Once the CLI spits out the `google_drive.json` mapping, simply upload that generated file to your headless server. Because the tokens are permanent, the server will assume your identity securely without ever requiring a browser component!)*
 

@@ -36,7 +36,8 @@ Backend credentials (API keys, tokens) are **decoupled from job configs**. They 
 
 ## Google Cloud Console Pitfalls
 These are things that tripped us up and will trip up any user or agent again:
-- **403 access_denied on first OAuth login**: New OAuth apps are in "Testing" mode. You MUST either publish the app OR add the user's email under OAuth Consent Screen → Test Users. The error message is in German and not obvious.
+- **7-Day Token Expiration (invalid_grant)**: New OAuth apps are in "Testing" mode. If left in Testing mode, refresh tokens forcefully expire after 7 days! You MUST click **Publish App** on the OAuth Consent Screen to move it to "In Production". Once published, the token is permanent.
+- **Unverified App Warning**: After publishing your app to Production (to get a permanent token), Google will show a scary red "Unverified App" warning during login. Because this is a personal script, you do not need to submit it to Google for a security audit. Simply click **Advanced (Erweitert)** -> **Go to [App Name] (unsafe)** to bypass it.
 - **Service Account 403 on upload**: Service Accounts have their own email (e.g. `sa@project.iam.gserviceaccount.com`). The target Google Drive folder must be explicitly shared with that email. Even then, Service Account storage counts against the 15GB project quota, not the user's Drive quota — this is why Consumer OAuth is preferred for personal use.
 - **Headless servers**: Google banned OOB (Out-of-Band) auth flows in 2022. The `setup-gdrive` command must be run on a machine with a browser. The resulting `google_drive.json` can then be copied to the headless server.
 
