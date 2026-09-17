@@ -20,7 +20,7 @@
       "aws_secret_access_key": "$ENV:AWS_SECRET_ACCESS_KEY",
       "aws_region": "eu-central-1",
       "aws_bucket": "my-backup-bucket",
-      "aws_prefix": "backups/sample/",
+      "aws_prefix": "backups/",
       "retention_count": 5
     }
   ]
