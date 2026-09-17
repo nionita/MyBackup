@@ -105,6 +105,12 @@ class GoogleDriveBackend(BackendBase):
             err = e.read().decode()
             raise Exception(f"Failed to authenticate with Google API: {e.code} {err}")
 
+    def get_change_detection_identity(self) -> dict:
+        return {
+            "backend_type": "google_drive",
+            "folder_id": self.folder_id,
+        }
+
     def upload(self, local_path: str, remote_key: str) -> None:
         self.authenticate()
         logger = logging.getLogger("backup")

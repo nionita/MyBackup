@@ -1,6 +1,7 @@
 import sys
 import argparse
 import logging
+import os
 from core import platform_utils, config_loader, logging_setup
 
 VERSION = "1.1.0"
@@ -18,6 +19,7 @@ def get_parser():
     # run parser
     run_parser = subparsers.add_parser("run", help="Executes the archiving and backend uploading pipeline.")
     run_parser.add_argument("--job", help="Run a specific job by its name (e.g., 'webserver' for 'job_webserver.json'). If omitted, runs all enabled jobs.")
+    run_parser.add_argument("--force", action="store_true", help="Create and upload a fresh backup even when sources are unchanged.")
 
     # list-jobs parser
     subparsers.add_parser("list-jobs", help="Discovers and lists all properly configured '.json' jobs in the config/jobs directory.")
@@ -106,8 +108,9 @@ def main():
             
             from core import job_runner
             success_count = 0
+            state_dir = os.path.join(args.config_dir, "state")
             for job in jobs:
-                if job_runner.run_job(job, creds):
+                if job_runner.run_job(job, creds, state_dir=state_dir, force=args.force):
                     success_count += 1
                     
             global_logger.info(f"All jobs completed. {success_count} successful, {len(jobs) - success_count} failed.")

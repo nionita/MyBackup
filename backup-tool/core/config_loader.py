@@ -90,6 +90,15 @@ def validate_job_config(job_name, data):
         lvl = data["archive"]["compression_level"]
         if not isinstance(lvl, int) or lvl < 1 or lvl > 9:
             raise ConfigError(f"Invalid compression level {lvl} in job '{job_name}'.")
+
+    if "change_detection" not in data:
+        data["change_detection"] = {"enabled": True}
+    elif not isinstance(data["change_detection"], dict):
+        raise ConfigError(f"Invalid change_detection configuration in job '{job_name}'.")
+    elif "enabled" not in data["change_detection"]:
+        data["change_detection"]["enabled"] = True
+    elif not isinstance(data["change_detection"]["enabled"], bool):
+        raise ConfigError(f"Invalid change_detection.enabled in job '{job_name}'.")
         
     return data
 

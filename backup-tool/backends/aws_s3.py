@@ -102,6 +102,14 @@ class AwsS3Backend(BackendBase):
         self.access_key = creds.findtext("{*}AccessKeyId")
         self.secret_key = creds.findtext("{*}SecretAccessKey")
         self.session_token = creds.findtext("{*}SessionToken")
+
+    def get_change_detection_identity(self) -> dict:
+        return {
+            "backend_type": "aws_s3",
+            "bucket": self.bucket,
+            "region": self.region,
+            "prefix": self.prefix,
+        }
         
     def _s3_request(self, method, key, query="", data=None, payload_hash=None, extra_headers=None):
         host = f"{self.bucket}.s3.{self.region}.amazonaws.com"

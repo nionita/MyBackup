@@ -36,6 +36,14 @@ class TestAwsS3Backend(unittest.TestCase):
             
     def test_prefix_normalization(self):
         self.assertEqual(self.backend.prefix, "backups/")
+
+    def test_change_detection_identity_excludes_credentials(self):
+        self.assertEqual(self.backend.get_change_detection_identity(), {
+            "backend_type": "aws_s3",
+            "bucket": "test-bucket",
+            "region": "us-east-1",
+            "prefix": "backups/",
+        })
         
 if __name__ == '__main__':
     unittest.main()
