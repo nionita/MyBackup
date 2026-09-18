@@ -129,7 +129,6 @@ def main():
             job_runner.run_retention_only(job, creds)
             
         elif args.command == "setup":
-            import os
             import json
             os.makedirs(os.path.join(args.config_dir, "jobs"), exist_ok=True)
             global_path = os.path.join(args.config_dir, "global.json")
@@ -149,7 +148,6 @@ def main():
             print(f"-- Setup Finished --\nYour active workspace scaffolding is mapped at: {os.path.abspath(args.config_dir)}")
             
         elif args.command == "setup-gdrive":
-            import os
             import json
             from core import gdrive_auth
             

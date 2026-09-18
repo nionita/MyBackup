@@ -1,8 +1,10 @@
 import os
+import sys
 import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
+import backup
 from backup import get_parser
 from core import change_detection, job_runner
 
@@ -59,6 +61,24 @@ class TestJobRunnerChangeDetection(unittest.TestCase):
         args = get_parser().parse_args(["run", "--job", "test_job", "--force"])
         self.assertTrue(args.force)
         self.assertEqual(args.job, "test_job")
+
+    def test_main_run_uses_module_os_for_state_directory(self):
+        logger = MagicMock()
+        with patch.object(backup.config_loader, "load_global_config", return_value={}), \
+             patch.object(backup.logging_setup, "setup_logger"), \
+             patch.object(backup.logging_setup, "get_job_logger", return_value=logger), \
+             patch.object(backup.config_loader, "load_backend_credentials", return_value={}), \
+             patch.object(backup.config_loader, "load_job_configs", return_value=[self.job]), \
+             patch.object(job_runner, "run_job", return_value=True) as run_job, \
+             patch.object(sys, "argv", ["backup.py", "--config-dir", self.temp_dir.name, "run"]):
+            backup.main()
+
+        run_job.assert_called_once_with(
+            self.job,
+            {},
+            state_dir=os.path.join(self.temp_dir.name, "state"),
+            force=False,
+        )
 
     def backends_for(self, failures=()):
         created = []
