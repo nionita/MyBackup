@@ -85,9 +85,11 @@ Run all configured jobs natively:
 python backup-tool/backup.py run
 ```
 
-Run a specific job:
+Run one or more specific jobs:
 ```sh
-python backup-tool/backup.py run --job webserver
+python backup-tool/backup.py run --job webserver database uploads
+# Repeated --job flags are also supported:
+python backup-tool/backup.py run --job webserver --job database
 ```
 
 Validate JSON Job format schemas structurally:

@@ -40,3 +40,4 @@ credentials/
 *token*.json
 config/jobs/*.json
 !config/jobs/job_sample.json
+config/state/

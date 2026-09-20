@@ -2,7 +2,7 @@ import os
 import sys
 import tempfile
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import backup
 from backup import get_parser
@@ -60,7 +60,13 @@ class TestJobRunnerChangeDetection(unittest.TestCase):
     def test_run_parser_accepts_force(self):
         args = get_parser().parse_args(["run", "--job", "test_job", "--force"])
         self.assertTrue(args.force)
-        self.assertEqual(args.job, "test_job")
+        self.assertEqual(args.job, [["test_job"]])
+
+    def test_run_parser_accepts_multiple_and_repeated_job_values(self):
+        args = get_parser().parse_args([
+            "run", "--job", "first", "second", "--job", "third",
+        ])
+        self.assertEqual(args.job, [["first", "second"], ["third"]])
 
     def test_main_run_uses_module_os_for_state_directory(self):
         logger = MagicMock()
@@ -79,6 +85,43 @@ class TestJobRunnerChangeDetection(unittest.TestCase):
             state_dir=os.path.join(self.temp_dir.name, "state"),
             force=False,
         )
+
+    def test_main_runs_requested_jobs_once_in_requested_order(self):
+        first_job = {**self.job, "name": "first"}
+        second_job = {**self.job, "name": "second"}
+        logger = MagicMock()
+        with patch.object(backup.config_loader, "load_global_config", return_value={}), \
+             patch.object(backup.logging_setup, "setup_logger"), \
+             patch.object(backup.logging_setup, "get_job_logger", return_value=logger), \
+             patch.object(backup.config_loader, "load_backend_credentials", return_value={}), \
+             patch.object(backup.config_loader, "load_job_configs", return_value=[first_job, second_job]), \
+             patch.object(job_runner, "run_job", return_value=True) as run_job, \
+             patch.object(sys, "argv", [
+                 "backup.py", "--config-dir", self.temp_dir.name,
+                 "run", "--job", "second", "first", "--job", "second",
+             ]):
+            backup.main()
+
+        self.assertEqual(run_job.call_args_list, [
+            call(second_job, {}, state_dir=os.path.join(self.temp_dir.name, "state"), force=False),
+            call(first_job, {}, state_dir=os.path.join(self.temp_dir.name, "state"), force=False),
+        ])
+
+    def test_main_rejects_unknown_jobs_before_starting_any_backup(self):
+        logger = MagicMock()
+        with patch.object(backup.config_loader, "load_global_config", return_value={}), \
+             patch.object(backup.logging_setup, "setup_logger"), \
+             patch.object(backup.logging_setup, "get_job_logger", return_value=logger), \
+             patch.object(backup.config_loader, "load_backend_credentials", return_value={}), \
+             patch.object(backup.config_loader, "load_job_configs", return_value=[self.job]), \
+             patch.object(job_runner, "run_job") as run_job, \
+             patch.object(sys, "argv", ["backup.py", "run", "--job", "test_job", "missing"]):
+            with self.assertRaises(SystemExit) as exited:
+                backup.main()
+
+        self.assertEqual(exited.exception.code, 1)
+        run_job.assert_not_called()
+        logger.error.assert_called_once_with("Requested job(s) not found: %s", "missing")
 
     def backends_for(self, failures=()):
         created = []

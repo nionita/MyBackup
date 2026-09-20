@@ -18,7 +18,13 @@ def get_parser():
 
     # run parser
     run_parser = subparsers.add_parser("run", help="Executes the archiving and backend uploading pipeline.")
-    run_parser.add_argument("--job", help="Run a specific job by its name (e.g., 'webserver' for 'job_webserver.json'). If omitted, runs all enabled jobs.")
+    run_parser.add_argument(
+        "--job",
+        action="append",
+        nargs="+",
+        metavar="JOB",
+        help="Run one or more named jobs. May be repeated; if omitted, runs all enabled jobs.",
+    )
     run_parser.add_argument("--force", action="store_true", help="Create and upload a fresh backup even when sources are unchanged.")
 
     # list-jobs parser
@@ -101,10 +107,20 @@ def main():
             creds = config_loader.load_backend_credentials(args.config_dir)
             jobs = config_loader.load_job_configs(args.config_dir)
             if args.job:
-                jobs = [j for j in jobs if j["name"] == args.job]
-                if not jobs:
-                    global_logger.error(f"Job '{args.job}' not found.")
+                requested_names = []
+                for group in args.job:
+                    for name in group:
+                        if name not in requested_names:
+                            requested_names.append(name)
+
+                jobs_by_name = {job["name"]: job for job in jobs}
+                missing_names = [name for name in requested_names if name not in jobs_by_name]
+                if missing_names:
+                    global_logger.error(
+                        "Requested job(s) not found: %s", ", ".join(missing_names)
+                    )
                     sys.exit(1)
+                jobs = [jobs_by_name[name] for name in requested_names]
             
             from core import job_runner
             success_count = 0
