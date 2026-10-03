@@ -18,6 +18,11 @@ class BackendBase(ABC):
         ...
 
     @abstractmethod
+    def get_change_detection_identity(self) -> dict:
+        """Return a stable, credential-free identity for the backup target."""
+        ...
+
+    @abstractmethod
     def list_backups(self, prefix: str) -> list[dict]:
         """List backups. Returns [{"key": "...", "last_modified": datetime, "size": int}]"""
         ...

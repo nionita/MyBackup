@@ -102,6 +102,16 @@ Der `name`-Feld innerhalb der Datei muss mit dem Dateinamen (ohne `job_`-Präfix
 
 - Wenn `"format": "none"`: Dateien werden einzeln hochgeladen. Verzeichnisstruktur wird durch Pfad-Präfixe abgebildet. Retention bezieht sich dann auf "Backup-Sets" (gruppiert nach Timestamp-Präfix).
 
+### `change_detection`-Objekt
+
+| Feld | Typ | Standard | Beschreibung |
+|------|-----|----------|-------------|
+| `enabled` | bool | `true` | Erstellt und lädt nur dann ein neues Archiv hoch, wenn sich die archivierten Quellen geändert haben. |
+
+- Der Fingerprint umfasst die tatsächlich archivierten Dateien, ihre Pfade und wiederherstellbare Metadaten.
+- Beim ersten Lauf ohne lokalen Zustand wird immer ein vollständiges Backup erstellt. Der Zustand liegt unter `<config-dir>/state/` und enthält keine Zugangsdaten.
+- Bei unveränderten Quellen läuft die Retention weiter. Mit `backup.py run --force` wird ein neues Backup unabhängig vom Fingerprint erzwungen.
+
 ### `backends`-Liste
 
 Jedes Element ist ein Objekt mit:

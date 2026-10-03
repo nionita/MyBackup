@@ -27,6 +27,40 @@ def should_exclude(rel_path, exclude_patterns):
                 return True
     return False
 
+def iter_included_files(sources: list[str], exclude_patterns: list[str] = None):
+    """Yield ``(file_path, archive_name)`` pairs included by an archive.
+
+    Keeping this traversal in one place makes archive creation and source
+    fingerprinting agree about exclusions and archive paths.
+    """
+    if exclude_patterns is None:
+        exclude_patterns = []
+
+    for source in sources:
+        if not os.path.exists(source):
+            continue
+
+        if os.path.isfile(source):
+            rel_in_source = os.path.basename(source)
+            if not should_exclude(rel_in_source, exclude_patterns):
+                yield source, os.path.splitdrive(source)[1].lstrip(os.path.sep)
+            continue
+
+        for root_dir, dirs, files in os.walk(source):
+            dirs[:] = sorted(
+                d for d in dirs
+                if not should_exclude(
+                    os.path.relpath(os.path.join(root_dir, d), source),
+                    exclude_patterns,
+                )
+            )
+            for file in sorted(files):
+                file_path = os.path.join(root_dir, file)
+                rel_path = os.path.relpath(file_path, source)
+                if should_exclude(rel_path, exclude_patterns):
+                    continue
+                yield file_path, os.path.splitdrive(file_path)[1].lstrip(os.path.sep)
+
 def create_archive(job_name: str, sources: list[str], archive_format: str, 
                    compression_level: int = 6, temp_dir: str = None,
                    exclude_patterns: list[str] = None) -> str:
@@ -56,62 +90,18 @@ def create_archive(job_name: str, sources: list[str], archive_format: str,
     try:
         if archive_format == "tar.gz":
             with tarfile.open(out_path, "w:gz", compresslevel=compression_level) as tar:
-                for source in sources:
-                    if not os.path.exists(source):
-                        continue
-                    
-                    if os.path.isfile(source):
-                        rel_in_source = os.path.basename(source)
-                        if should_exclude(rel_in_source, exclude_patterns):
-                            continue
-                        arcname = os.path.splitdrive(source)[1].lstrip(os.path.sep)
-                        tar.add(source, arcname=arcname)
-                        file_count += 1
-                        total_size += os.path.getsize(source)
-                    else:
-                        for root_dir, dirs, files in os.walk(source):
-                            dirs[:] = [d for d in dirs if not should_exclude(os.path.relpath(os.path.join(root_dir, d), source), exclude_patterns)]
-                            
-                            for file in files:
-                                file_path = os.path.join(root_dir, file)
-                                rel_path = os.path.relpath(file_path, source)
-                                if should_exclude(rel_path, exclude_patterns):
-                                    continue
-                                
-                                arcname = os.path.splitdrive(file_path)[1].lstrip(os.path.sep)
-                                tar.add(file_path, arcname=arcname)
-                                file_count += 1
-                                total_size += os.path.getsize(file_path)
+                for file_path, arcname in iter_included_files(sources, exclude_patterns):
+                    tar.add(file_path, arcname=arcname)
+                    file_count += 1
+                    total_size += os.path.getsize(file_path)
                                 
         elif archive_format == "zip":
             # Note: ZIP_DEFLATED level 1-9 is supported since Py 3.7
             with zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=compression_level) as zf:
-                for source in sources:
-                    if not os.path.exists(source):
-                        continue
-                        
-                    if os.path.isfile(source):
-                        rel_in_source = os.path.basename(source)
-                        if should_exclude(rel_in_source, exclude_patterns):
-                            continue
-                        arcname = os.path.splitdrive(source)[1].lstrip(os.path.sep)
-                        zf.write(source, arcname=arcname)
-                        file_count += 1
-                        total_size += os.path.getsize(source)
-                    else:
-                        for root_dir, dirs, files in os.walk(source):
-                            dirs[:] = [d for d in dirs if not should_exclude(os.path.relpath(os.path.join(root_dir, d), source), exclude_patterns)]
-                            
-                            for file in files:
-                                file_path = os.path.join(root_dir, file)
-                                rel_path = os.path.relpath(file_path, source)
-                                if should_exclude(rel_path, exclude_patterns):
-                                    continue
-                                
-                                arcname = os.path.splitdrive(file_path)[1].lstrip(os.path.sep)
-                                zf.write(file_path, arcname=arcname)
-                                file_count += 1
-                                total_size += os.path.getsize(file_path)
+                for file_path, arcname in iter_included_files(sources, exclude_patterns):
+                    zf.write(file_path, arcname=arcname)
+                    file_count += 1
+                    total_size += os.path.getsize(file_path)
                                 
         out_size_mb = os.path.getsize(out_path) / (1024 * 1024)
         logger.info(f"Archive created: {filename} ({out_size_mb:.2f} MB, {file_count} files, original size: {total_size / (1024*1024):.2f} MB)")

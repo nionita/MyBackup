@@ -53,7 +53,7 @@ Der Einstiegspunkt ist `backup.py`. Aufruf:
 python backup.py run
 
 # Einen bestimmten Job ausführen:
-python backup.py run --job webserver
+python backup.py run --job webserver database
 
 # Alle Jobs auflisten:
 python backup.py list-jobs

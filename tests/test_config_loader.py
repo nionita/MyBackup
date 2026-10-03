@@ -49,6 +49,27 @@ class TestConfigLoader(unittest.TestCase):
         }
         validated = config_loader.validate_job_config("test_job", data)
         self.assertEqual(validated["archive"]["compression_level"], 6)
+        self.assertTrue(validated["change_detection"]["enabled"])
+
+    def test_validate_job_config_change_detection_opt_out(self):
+        data = {
+            "name": "test_job",
+            "sources": [self.dummy_source],
+            "backends": [{"backend_type": "aws_s3", "retention_count": 5}],
+            "change_detection": {"enabled": False},
+        }
+        validated = config_loader.validate_job_config("test_job", data)
+        self.assertFalse(validated["change_detection"]["enabled"])
+
+    def test_validate_job_config_invalid_change_detection(self):
+        data = {
+            "name": "test_job",
+            "sources": [self.dummy_source],
+            "backends": [{"backend_type": "aws_s3", "retention_count": 5}],
+            "change_detection": {"enabled": "yes"},
+        }
+        with self.assertRaisesRegex(config_loader.ConfigError, "change_detection.enabled"):
+            config_loader.validate_job_config("test_job", data)
 
     def test_validate_job_config_invalid_name(self):
         data = {"name": "wrong_name", "sources": [self.dummy_source], "backends": [{"backend_type": "aws_s3", "retention_count": 5}]}
