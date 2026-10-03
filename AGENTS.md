@@ -12,6 +12,12 @@ The cross-platform Backup Tool is built globally in **Python 3.12+**.
 - **German Documentation Specs**: `backup_spec/` (Contains original `01...` through `06` module specific specs).
 - **Setup Guides**: `AWS_SETUP_GUIDE.md`, `GDRIVE_SETUP_GUIDE.md` at repo root.
 
+## Local Development Environment
+- Before running scripts or tests, read `LOCAL_ENV.md` if present. It contains machine-specific interpreter paths and commands.
+- Verify the selected interpreter's version before use. If the file is absent, discover a suitable Python 3.12+ interpreter.
+- `LOCAL_ENV.md` is Git-ignored. Use the tracked `LOCAL_ENV.example.md` as a template for each machine.
+- Keep shared Windows/Linux conventions in this file or `README.md`; keep machine-specific paths and preferences in `LOCAL_ENV.md`. Never record credentials in either environment file.
+
 ## Credentials Architecture
 Backend credentials (API keys, tokens) are **decoupled from job configs**. They live in `<config-dir>/credentials/<backend_type>.json` (e.g. `google_drive.json`, `aws_s3.json`). The `config_loader.load_backend_credentials()` function reads them, and `job_runner.instantiate_backend()` merges them into each backend's config at runtime. **Merge priority**: job-level keys override global credential keys (not the other way around). This means a user can have shared credentials but per-job overrides like `gd_folder_id`.
 
@@ -53,4 +59,3 @@ These are things that tripped us up and will trip up any user or agent again:
 
 ## Future Roadmap Priorities
 - **AES Backup Output Encryption Setup** (Deferred until architecture passes `ENTSCHEIDUNG_VERSCHLUESSELUNG.md`).
-

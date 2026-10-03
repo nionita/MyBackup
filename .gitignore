@@ -5,6 +5,7 @@ __pycache__/
 *.so
 
 # Environments
+/LOCAL_ENV.md
 .env
 .venv
 env/
