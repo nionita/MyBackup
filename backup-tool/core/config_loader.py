@@ -46,6 +46,15 @@ def load_global_config(config_dir="config"):
 
 def validate_job_config(job_name, data):
     """Validates the job configuration dict according to the specified rules."""
+    if not isinstance(data, dict):
+        raise ConfigError(f"Job '{job_name}' must be a JSON object.")
+    archive = data.get("archive", {})
+    if not isinstance(archive, dict):
+        raise ConfigError(f"Invalid archive configuration in job '{job_name}'.")
+    preserve_links = archive.get("preserve_directory_symlinks", False)
+    if not isinstance(preserve_links, bool):
+        raise ConfigError(f"Invalid archive.preserve_directory_symlinks in job '{job_name}'.")
+
     if not re.match(r"^[a-zA-Z0-9_]+$", job_name):
         raise ConfigError(f"Job name '{job_name}' contains invalid characters.")
 
@@ -56,14 +65,14 @@ def validate_job_config(job_name, data):
         raise ConfigError(f"Job '{job_name}' must have at least one source.")
         
     for source in data["sources"]:
-        if not os.path.exists(source):
+        if not (os.path.exists(source) or (preserve_links and os.path.islink(os.path.normpath(source)))):
             import logging
             try:
                 logging.getLogger("backup").warning(f"Source path does not exist: {source} in job {job_name}")
             except Exception:
                 pass
 
-    if not any(os.path.exists(s) for s in data["sources"]):
+    if not any(os.path.exists(s) or (preserve_links and os.path.islink(os.path.normpath(s))) for s in data["sources"]):
         raise ConfigError(f"None of the sources for job '{job_name}' exist.")
         
     if "backends" not in data or not isinstance(data["backends"], list) or len(data["backends"]) == 0:
@@ -83,6 +92,9 @@ def validate_job_config(job_name, data):
         
     if data["archive"]["format"] not in ["zip", "tar.gz", "none"]:
         raise ConfigError(f"Invalid archive format in job '{job_name}': {data['archive']['format']}")
+    if preserve_links and data["archive"]["format"] != "tar.gz":
+        raise ConfigError(f"Job '{job_name}': archive.preserve_directory_symlinks requires tar.gz.")
+    data["archive"]["preserve_directory_symlinks"] = preserve_links
         
     if "compression_level" not in data["archive"]:
         data["archive"]["compression_level"] = 6
@@ -102,7 +114,7 @@ def validate_job_config(job_name, data):
         
     return data
 
-def load_job_configs(config_dir="config"):
+def load_job_configs(config_dir="config", errors=None):
     """Loads all jobs from config_dir/jobs directory."""
     jobs = []
     jobs_dir = os.path.join(config_dir, "jobs")
@@ -133,20 +145,20 @@ def load_job_configs(config_dir="config"):
             filepath = os.path.join(jobs_dir, filename)
             check_permissions(filepath)
                     
-            with open(filepath, "r", encoding="utf-8") as f:
-                try:
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                except json.JSONDecodeError as e:
-                    raise ConfigError(f"Invalid JSON in {filepath}: {e}")
-                    
-            if data.get("enabled", True) is False:
-                import logging
-                logging.getLogger("backup").info(f"Skipping job '{job_name}' because 'enabled' is false.")
-                continue
-                
-            data = resolve_env_vars(data)
-            data = validate_job_config(job_name, data)
-            jobs.append(data)
+                if isinstance(data, dict) and data.get("enabled", True) is False:
+                    import logging
+                    logging.getLogger("backup").info(f"Skipping job '{job_name}' because 'enabled' is false.")
+                    continue
+                data = resolve_env_vars(data)
+                data = validate_job_config(job_name, data)
+                jobs.append(data)
+            except (ConfigError, OSError, ValueError, TypeError, KeyError) as error:
+                if errors is None:
+                    raise ConfigError(f"Invalid job '{job_name}': {error}") from error
+                errors[job_name] = str(error)
             
     return jobs
 

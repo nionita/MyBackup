@@ -84,7 +84,8 @@ Der `name`-Feld innerhalb der Datei muss mit dem Dateinamen (ohne `job_`-Präfix
 ### `sources`-Feld
 
 - Absolut-Pfade, plattformgerecht (Linux: `/var/www`, Windows: `C:\Users\me\Documents`).
-- Symlinks: Werden standardmäßig gefolgt (d. h. das Ziel wird gesichert). Später optional: `"follow_symlinks": false`.
+- Verzeichnis-Symlinks werden standardmäßig ausgelassen. Mit `archive.preserve_directory_symlinks: true` werden sie nur in TAR als Links gespeichert, ohne das Ziel zu durchlaufen. Explizite Symlink-Quellen und defekte Links sind damit erlaubt.
+- Datei-Symlinks: TAR speichert den Link, ZIP den Inhalt der Zieldatei. Windows-Junctions werden mit aktivierter Option übersprungen und nicht unterstützt.
 - Nicht existierende Quellen: Werden geloggt als WARNING, Job läuft weiter mit den vorhandenen Quellen. Wenn ALLE Quellen fehlen → Job schlägt fehl.
 
 ### `exclude_patterns`-Feld
@@ -99,6 +100,7 @@ Der `name`-Feld innerhalb der Datei muss mit dem Dateinamen (ohne `job_`-Präfix
 |------|-----|----------|-------------|
 | `format` | string | `"tar.gz"` (Linux), `"zip"` (Windows) | `"tar.gz"`, `"zip"` oder `"none"` |
 | `compression_level` | int | 6 | 1 (schnell, wenig Kompression) bis 9 (langsam, max. Kompression) |
+| `preserve_directory_symlinks` | bool | `false` | Verzeichnis-Links ohne Durchlaufen speichern; nur mit `tar.gz` erlaubt |
 
 - Wenn `"format": "none"`: Dateien werden einzeln hochgeladen. Verzeichnisstruktur wird durch Pfad-Präfixe abgebildet. Retention bezieht sich dann auf "Backup-Sets" (gruppiert nach Timestamp-Präfix).
 
@@ -224,3 +226,18 @@ Beispiel: `backups/webserver/webserver_2026-04-04T061800Z.tar.gz`
 
 - Timestamp: UTC, ISO 8601, ohne Sonderzeichen die Probleme machen (`T` statt Leerzeichen, keine `:` → `HHMMSS`).
 - Dadurch sind Backups natürlich chronologisch sortierbar.
+
+## Verzeichnis-Symlinks und Fehlerisolierung
+
+`preserve_directory_symlinks: true` mit ZIP oder `none` ist ein fataler
+Konfigurationsfehler für diesen Job. Bei `run` werden andere gültige ausgewählte
+Jobs weiter ausgeführt; Exit-Code 1 zeigt mindestens einen Fehler an. `validate`
+meldet alle ungültigen Jobs. Unbekannte Namen bei `run --job` verhindern weiterhin
+jeden Job-Start. Deaktivierte Jobs werden übersprungen.
+
+Ausschlüsse gelten auch für Link-Pfade. Gespeichert werden Link-Metadaten und
+Zielpfad; Änderungen ausschließlich im externen Ziel ändern den Fingerprint
+nicht. Zielinhalte müssen als eigene Quelle gesichert werden. Wiederherstellung
+unter Windows erfordert passende Symlink-Rechte; absolute Ziele bleiben absolut.
+Sichere TAR-Extraktionsfilter können absolute oder außerhalb des Restore-Ordners
+liegende Ziele ablehnen. Details und Beispiele stehen im Haupt-README.

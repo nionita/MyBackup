@@ -93,7 +93,12 @@ def main():
 
     try:
         if args.command == "validate":
-            jobs = config_loader.load_job_configs(args.config_dir)
+            errors = {}
+            jobs = config_loader.load_job_configs(args.config_dir, errors=errors)
+            for name, error in errors.items():
+                global_logger.error("Invalid job '%s': %s", name, error)
+            if errors:
+                sys.exit(1)
             global_logger.info(f"Loaded {len(jobs)} valid jobs.")
             print("Validation successful.")
             
@@ -105,7 +110,8 @@ def main():
                 
         elif args.command == "run":
             creds = config_loader.load_backend_credentials(args.config_dir)
-            jobs = config_loader.load_job_configs(args.config_dir)
+            errors = {}
+            jobs = config_loader.load_job_configs(args.config_dir, errors=errors)
             if args.job:
                 requested_names = []
                 for group in args.job:
@@ -114,13 +120,17 @@ def main():
                             requested_names.append(name)
 
                 jobs_by_name = {job["name"]: job for job in jobs}
-                missing_names = [name for name in requested_names if name not in jobs_by_name]
+                missing_names = [name for name in requested_names if name not in jobs_by_name and name not in errors]
                 if missing_names:
                     global_logger.error(
                         "Requested job(s) not found: %s", ", ".join(missing_names)
                     )
                     sys.exit(1)
-                jobs = [jobs_by_name[name] for name in requested_names]
+                jobs = [jobs_by_name[name] for name in requested_names if name in jobs_by_name]
+                errors = {name: errors[name] for name in requested_names if name in errors}
+
+            for name, error in errors.items():
+                global_logger.error("Invalid job '%s'; backup not started: %s", name, error)
             
             from core import job_runner
             success_count = 0
@@ -129,8 +139,8 @@ def main():
                 if job_runner.run_job(job, creds, state_dir=state_dir, force=args.force):
                     success_count += 1
                     
-            global_logger.info(f"All jobs completed. {success_count} successful, {len(jobs) - success_count} failed.")
-            if success_count < len(jobs):
+            global_logger.info(f"All jobs completed. {success_count} successful, {len(jobs) + len(errors) - success_count} failed.")
+            if success_count < len(jobs) or errors:
                 sys.exit(1)
 
         elif args.command == "cleanup":

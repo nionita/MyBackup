@@ -27,7 +27,8 @@ def should_exclude(rel_path, exclude_patterns):
                 return True
     return False
 
-def iter_included_files(sources: list[str], exclude_patterns: list[str] = None):
+def iter_included_files(sources: list[str], exclude_patterns: list[str] = None,
+                        preserve_directory_symlinks: bool = False):
     """Yield ``(file_path, archive_name)`` pairs included by an archive.
 
     Keeping this traversal in one place makes archive creation and source
@@ -37,6 +38,14 @@ def iter_included_files(sources: list[str], exclude_patterns: list[str] = None):
         exclude_patterns = []
 
     for source in sources:
+        if preserve_directory_symlinks:
+            source = os.path.normpath(source)
+            if os.path.isjunction(source):
+                continue
+        if preserve_directory_symlinks and os.path.islink(source):
+            if not should_exclude(os.path.basename(source.rstrip(os.path.sep)), exclude_patterns):
+                yield source, os.path.splitdrive(source)[1].lstrip(os.path.sep)
+            continue
         if not os.path.exists(source):
             continue
 
@@ -54,6 +63,14 @@ def iter_included_files(sources: list[str], exclude_patterns: list[str] = None):
                     exclude_patterns,
                 )
             )
+            if preserve_directory_symlinks:
+                for directory in dirs:
+                    directory_path = os.path.join(root_dir, directory)
+                    if os.path.islink(directory_path):
+                        yield directory_path, os.path.splitdrive(directory_path)[1].lstrip(os.path.sep)
+                # Never traverse links; Windows junctions are not supported either.
+                dirs[:] = [d for d in dirs if not os.path.islink(os.path.join(root_dir, d))
+                           and not os.path.isjunction(os.path.join(root_dir, d))]
             for file in sorted(files):
                 file_path = os.path.join(root_dir, file)
                 rel_path = os.path.relpath(file_path, source)
@@ -63,7 +80,8 @@ def iter_included_files(sources: list[str], exclude_patterns: list[str] = None):
 
 def create_archive(job_name: str, sources: list[str], archive_format: str, 
                    compression_level: int = 6, temp_dir: str = None,
-                   exclude_patterns: list[str] = None) -> str:
+                   exclude_patterns: list[str] = None,
+                   preserve_directory_symlinks: bool = False) -> str:
     """Creates a compressed archive for the given sources."""
     if exclude_patterns is None:
         exclude_patterns = []
@@ -74,6 +92,8 @@ def create_archive(job_name: str, sources: list[str], archive_format: str,
     
     if archive_format not in ["tar.gz", "zip"]:
         raise ArchiveError(f"Unsupported archive format: {archive_format}")
+    if preserve_directory_symlinks and archive_format != "tar.gz":
+        raise ArchiveError("preserve_directory_symlinks requires tar.gz")
         
     ext = ".tar.gz" if archive_format == "tar.gz" else ".zip"
     filename = f"{job_name}_{timestamp_str}{ext}"
@@ -89,11 +109,11 @@ def create_archive(job_name: str, sources: list[str], archive_format: str,
 
     try:
         if archive_format == "tar.gz":
-            with tarfile.open(out_path, "w:gz", compresslevel=compression_level) as tar:
-                for file_path, arcname in iter_included_files(sources, exclude_patterns):
-                    tar.add(file_path, arcname=arcname)
+            with tarfile.open(out_path, "w:gz", compresslevel=compression_level, dereference=False) as tar:
+                for file_path, arcname in iter_included_files(sources, exclude_patterns, preserve_directory_symlinks):
+                    tar.add(file_path, arcname=arcname, recursive=False)
                     file_count += 1
-                    total_size += os.path.getsize(file_path)
+                    total_size += 0 if os.path.islink(file_path) else os.path.getsize(file_path)
                                 
         elif archive_format == "zip":
             # Note: ZIP_DEFLATED level 1-9 is supported since Py 3.7

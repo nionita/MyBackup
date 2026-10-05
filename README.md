@@ -97,6 +97,37 @@ Validate JSON Job format schemas structurally:
 python backup-tool/backup.py validate
 ```
 
+## Directory symbolic links (TAR only)
+
+Directory links are omitted by default. To preserve them, configure:
+
+```json
+"archive": {
+  "format": "tar.gz",
+  "compression_level": 6,
+  "preserve_directory_symlinks": true
+}
+```
+
+The link and its original target path are saved; the target directory is never
+traversed through the link. Include the target separately if its contents need
+backup. Exclusions apply to link names and paths. Explicit link sources and
+broken links are supported. TAR also preserves file links. Changing a link target
+triggers a backup; changes to contents reached only through that link do not.
+Windows junctions are unsupported and are skipped when this option is enabled.
+
+Enabling this option with ZIP or `none` is a configuration error: that job never
+starts, other valid selected jobs still run, and the overall command exits with
+status 1. `validate` reports all invalid jobs. Unknown requested job names abort
+before any job starts. ZIP behavior is unchanged (file links copy target data).
+
+Restore with a TAR tool supporting symlinks. On Windows, creating symlinks may
+require Developer Mode or administrator privileges. Relative targets are restored
+as recorded; absolute targets still reference their original locations. Python's
+safe TAR extraction filters reject absolute or outside-directory link targets;
+restoring those requires an explicitly trusted extraction policy. Inspect the
+archive and restore into an isolated directory first.
+
 ## Changed-source backups
 
 Change detection is enabled by default. Before creating an archive, the tool

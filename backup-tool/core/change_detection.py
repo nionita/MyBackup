@@ -35,12 +35,12 @@ def _add_metadata(digest, file_stat):
         _add_value(digest, file_stat.st_gid)
 
 
-def calculate_source_fingerprint(sources, exclude_patterns):
+def calculate_source_fingerprint(sources, exclude_patterns, preserve_directory_symlinks=False):
     """Hash the exact included archive payload and restorable metadata."""
     digest = hashlib.sha256()
     _add_value(digest, f"source-fingerprint-v{FINGERPRINT_VERSION}")
 
-    for file_path, archive_name in archiver.iter_included_files(sources, exclude_patterns):
+    for file_path, archive_name in archiver.iter_included_files(sources, exclude_patterns, preserve_directory_symlinks):
         file_stat = os.lstat(file_path)
         _add_value(digest, "entry")
         _add_value(digest, archive_name.replace(os.path.sep, "/"))

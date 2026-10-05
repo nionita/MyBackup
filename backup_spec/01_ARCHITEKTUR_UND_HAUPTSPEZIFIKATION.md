@@ -83,7 +83,7 @@ CLI-Parsing: Ausschließlich mit `argparse` (stdlib).
 
 ### `core/config_loader.py`
 - Liest `config/global.json` und alle `config/jobs/*.json`.
-- Validiert Schema (Pflichtfelder, Typen) → Fehler = klare Fehlermeldung + Abbruch.
+- Validiert Schema (Pflichtfelder, Typen). `run` isoliert ungültige Jobs und führt andere ausgewählte Jobs weiter aus; `validate` meldet alle Fehler und liefert Exit-Code 1.
 - Gibt strukturierte Python-Dicts zurück.
 - Kein externes Schema-Validierungs-Tool – eigene Validierungslogik.
 
@@ -230,3 +230,13 @@ BACKEND_REGISTRY = {
 ```
 
 - Neue Backends werden durch Eintrag im Registry aktiviert — kein Umbau der Core-Logik nötig.
+
+## TAR-Symlink-Erhaltung
+
+`archive.preserve_directory_symlinks` ist optional und standardmäßig `false`.
+Nur `tar.gz` unterstützt diese Option; ZIP/`none` werden vor Job-Start abgelehnt.
+Archivierung und Change Detection verwenden denselben Traversal: Link-Einträge
+werden gespeichert, Verzeichnisziele niemals über Links durchlaufen. Defekte und
+explizite Link-Quellen bleiben erhalten. Windows-Junctions sind nicht unterstützt.
+Dateigrößenstatistik folgt TAR-Links nicht. Zielpfadänderungen lösen Backups aus,
+Änderungen ausschließlich im externen Ziel nicht.

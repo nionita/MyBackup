@@ -29,7 +29,12 @@ def run_job(job_config: dict, global_creds: dict = None, state_dir: str = "confi
     logger.info("Backup started")
     
     start_time = time.time()
-    sources = [s for s in job_config.get("sources", []) if os.path.exists(s)]
+    preserve_links = job_config.get("archive", {}).get("preserve_directory_symlinks", False)
+    if preserve_links and job_config.get("archive", {}).get("format") != "tar.gz":
+        logger.error("archive.preserve_directory_symlinks requires tar.gz.")
+        return False
+    sources = [s for s in job_config.get("sources", [])
+               if os.path.exists(s) or (preserve_links and os.path.islink(os.path.normpath(s)))]
     
     if not sources:
         logger.error("No valid sources found to backup.")
@@ -50,7 +55,7 @@ def run_job(job_config: dict, global_creds: dict = None, state_dir: str = "confi
         state = None
 
         if change_detection_enabled:
-            source_fingerprint = change_detection.calculate_source_fingerprint(sources, exclude_patterns)
+            source_fingerprint = change_detection.calculate_source_fingerprint(sources, exclude_patterns, preserve_links)
             policy_fingerprint = change_detection.calculate_policy_fingerprint(job_config)
             state = change_detection.load_state(state_dir, job_name, logger)
 
@@ -81,7 +86,8 @@ def run_job(job_config: dict, global_creds: dict = None, state_dir: str = "confi
                 sources=sources,
                 archive_format=archive_format,
                 compression_level=comp_level,
-                exclude_patterns=exclude_patterns
+                exclude_patterns=exclude_patterns,
+                preserve_directory_symlinks=preserve_links,
             )
             target_key = f"{job_name}/{os.path.basename(archive_path)}"
         elif needs_archive:
