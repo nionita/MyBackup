@@ -95,6 +95,16 @@ def validate_job_config(job_name, data):
     if preserve_links and data["archive"]["format"] != "tar.gz":
         raise ConfigError(f"Job '{job_name}': archive.preserve_directory_symlinks requires tar.gz.")
     data["archive"]["preserve_directory_symlinks"] = preserve_links
+
+    encryption = data.setdefault("encryption", {})
+    if not isinstance(encryption, dict):
+        raise ConfigError(f"Invalid encryption configuration in job '{job_name}'.")
+    encryption.setdefault("enabled", False)
+    if not isinstance(encryption["enabled"], bool):
+        raise ConfigError(f"Invalid encryption.enabled in job '{job_name}'.")
+    for field in ("recipient", "executable"):
+        if field in encryption and (not isinstance(encryption[field], str) or not encryption[field].strip()):
+            raise ConfigError(f"Invalid encryption.{field} in job '{job_name}'.")
         
     if "compression_level" not in data["archive"]:
         data["archive"]["compression_level"] = 6
@@ -185,13 +195,16 @@ def load_backend_credentials(config_dir="config"):
                 except Exception:
                     pass
             
-            with open(filepath, "r", encoding="utf-8") as f:
-                try:
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                except json.JSONDecodeError as e:
-                    raise ConfigError(f"Invalid JSON in {filepath}: {e}")
-                    
-            data = resolve_env_vars(data)
-            creds[backend_id] = data
+                if not isinstance(data, dict):
+                    raise ConfigError(f"Credentials in {filepath} must be a JSON object.")
+                creds[backend_id] = resolve_env_vars(data)
+            except (ConfigError, OSError, ValueError) as error:
+                if backend_id != "age":
+                    raise ConfigError(f"Invalid credentials in {filepath}: {error}") from error
+                # Defer optional encryption credential errors to jobs using them.
+                creds[backend_id] = ConfigError(f"Invalid credentials in {filepath}: {error}")
             
     return creds

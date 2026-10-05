@@ -241,3 +241,38 @@ nicht. Zielinhalte müssen als eigene Quelle gesichert werden. Wiederherstellung
 unter Windows erfordert passende Symlink-Rechte; absolute Ziele bleiben absolut.
 Sichere TAR-Extraktionsfilter können absolute oder außerhalb des Restore-Ordners
 liegende Ziele ablehnen. Details und Beispiele stehen im Haupt-README.
+
+## Optionale age-Verschlüsselung
+
+Job-Feld `"encryption": {"enabled": true}` aktiviert Verschlüsselung nach der
+Komprimierung für TAR oder ZIP. Standard ist `false`. Die Python-Implementierung
+bleibt reine Standardbibliothek; verschlüsselte Jobs benötigen das externe
+`age`-Programm. Geteilte Einstellungen werden über den vorhandenen
+Credential-Loader aus `<config-dir>/credentials/age.json` geladen:
+
+```json
+{
+  "recipient": "age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p",
+  "executable": "age"
+}
+```
+
+Der Beispiel-Empfänger muss durch den eigenen öffentlichen Schlüssel ersetzt
+werden. `recipient` und `executable` im Job-Objekt `encryption` überschreiben
+geteilte Werte. `executable` verwendet standardmäßig `age` auf PATH; absolute
+Pfade sind erlaubt. `$ENV:` funktioniert wie bei anderen Credentials. Nur ein
+nativer öffentlicher `age1...`-Empfänger wird unterstützt. Private Identitäten
+werden nicht in Job-Konfiguration oder Backup-Zustand gespeichert.
+
+`enabled` muss boolean sein; vorhandene Empfänger-/Executable-Felder müssen
+nichtleere Strings sein. Die strukturelle Validierung erfordert keine installierte
+age-Binärdatei. Laufzeit-Preflight prüft den effektiven Empfänger und age vor
+Fingerprinting/Backend-Operationen, auch bei unveränderten Quellen. Fehler
+betreffen nur diesen Job; andere ausgewählte Jobs laufen weiter (Exit-Code 1 bei
+mindestens einem Fehler). Defekte optionale age-Credentials beeinträchtigen keine
+unverschlüsselten Jobs; ein Job mit eigenem Empfänger kann unabhängig davon laufen.
+
+Ein- und Ausschalten sowie Empfängerrotation ändern den Policy-Fingerprint;
+der Executable-Pfad nicht. Dateiendungen sind `.tar.gz.age` bzw. `.zip.age`.
+Retention zählt alte unverschlüsselte und neue verschlüsselte Backups gemeinsam
+unter dem Job-Präfix. Installation und Restore sind im Haupt-README dokumentiert.

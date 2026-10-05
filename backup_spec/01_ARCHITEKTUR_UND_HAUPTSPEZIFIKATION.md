@@ -240,3 +240,28 @@ werden gespeichert, Verzeichnisziele niemals über Links durchlaufen. Defekte un
 explizite Link-Quellen bleiben erhalten. Windows-Junctions sind nicht unterstützt.
 Dateigrößenstatistik folgt TAR-Links nicht. Zielpfadänderungen lösen Backups aus,
 Änderungen ausschließlich im externen Ziel nicht.
+
+## Optionale age-Pipeline
+
+Die Anwendung verwendet weiterhin ausschließlich Python-Standardbibliothek.
+`age` ist eine optionale externe Systemabhängigkeit für verschlüsselte Jobs.
+`core/encryption.py` kapselt Credential-Merging, ausführbare Datei/Empfänger-
+Preflight, Encrypt und Decrypt ohne Shell. Public-Key-Credentials liegen unter
+`credentials/age.json`; Job-Werte haben Vorrang. Private Schlüssel verbleiben
+auf dem Recovery-System. Fehler des optionalen Credential-Files oder fehlendes
+age betreffen nur Jobs, die darauf angewiesen sind.
+
+Komprimierung erfolgt in einem privaten temporären Verzeichnis, anschließend
+verschlüsselt age das Archiv genau einmal. Vor Upload wird das Klartextarchiv
+entfernt. Alle ausstehenden Backends erhalten dieselbe `.age`-Datei. Erfolg im
+Change-Detection-Zustand wird erst nach erfolgreichem Upload gespeichert. Der
+Policy-Fingerprint berücksichtigt den effektiven Empfänger als Hash. Alle
+Payloads werden mit begrenztem Speicher verarbeitet und temporäre Dateien auf
+Erfolgs- und Fehlerpfaden entfernt. Entfernen ist keine sichere Datenträgerlöschung.
+
+`python backup.py decrypt INPUT --identity PATH --output PATH [--executable PATH]`
+ist ohne Job-Konfiguration verwendbar. Decryption wird vollständig geprüft,
+bevor ein neuer Output per Hardlink atomar veröffentlicht wird (Linux, Windows
+NTFS; Hardlink-fähiges Dateisystem erforderlich). Vorhandene Outputs werden nie
+überschrieben. Kein automatisches Entpacken. Bei falschem Schlüssel, abgeschnittenen
+oder manipulierten Daten werden keine ungeprüften Klartextdateien veröffentlicht.

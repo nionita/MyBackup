@@ -60,7 +60,7 @@ def calculate_source_fingerprint(sources, exclude_patterns, preserve_directory_s
     return digest.hexdigest()
 
 
-def calculate_policy_fingerprint(job_config):
+def calculate_policy_fingerprint(job_config, encryption_settings=None):
     """Hash settings which alter the archive payload without exposing secrets."""
     policy = {
         "version": FINGERPRINT_VERSION,
@@ -68,6 +68,11 @@ def calculate_policy_fingerprint(job_config):
         "exclude_patterns": job_config.get("exclude_patterns", []),
         "archive": job_config.get("archive", {}),
     }
+    if encryption_settings is not None:
+        policy["encryption"] = {
+            "enabled": True,
+            "recipient_sha256": hashlib.sha256(encryption_settings["recipient"].encode("utf-8")).hexdigest(),
+        }
     encoded = json.dumps(policy, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 

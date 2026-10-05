@@ -4,7 +4,7 @@ This document tracks vital architecture notes, structural findings, and testing 
 
 ## Project Scope Constraint
 The cross-platform Backup Tool is built globally in **Python 3.12+**. 
-**Crucial Condition**: No third-party bindings or environments (`pip`, `venv`, `boto3`) are allowed. Everything relies purely on the OS core Python Built-ins.
+**Crucial Condition**: No third-party bindings or environments (`pip`, `venv`, `boto3`) are allowed. All Python code relies purely on the OS core Python Built-ins. Optional backup encryption invokes the external `age` executable; this adds no Python packages or bindings.
 
 ## Directory Structure Map
 - **Application App**: `backup-tool/`
@@ -58,4 +58,4 @@ These are things that tripped us up and will trip up any user or agent again:
 - **Credential merge tests** (`test_config_loader.py::test_load_backend_credentials`): These actually instantiate the `GoogleDriveBackend` class to verify merge priority. If you change the backend constructor signature, this test will break.
 
 ## Future Roadmap Priorities
-- **AES Backup Output Encryption Setup** (Deferred until architecture passes `ENTSCHEIDUNG_VERSCHLUESSELUNG.md`).
+- **age encryption** is implemented as an optional external executable; see `backup_spec/ENTSCHEIDUNG_VERSCHLUESSELUNG.md` and README for configuration and recovery. Shared public recipients use `credentials/age.json`, with job overrides. Private identities stay on the recovery machine.

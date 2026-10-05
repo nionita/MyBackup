@@ -1,11 +1,12 @@
 # Python Backup-Tool
 
-A cross-platform backup utility written entirely in Python (>= 3.12) using only the standard library. It safely compresses and uploads directories/files directly to cloud storage (currently AWS S3), applying retention policies without any third-party dependencies.
+A cross-platform backup utility written entirely in Python (>= 3.12) using only the standard library. It safely compresses and uploads directories/files directly to cloud storage (currently AWS S3), applying retention policies without third-party Python packages. Optional encryption uses the external `age` executable.
 
 ## Setup Requirements
 
 - **Python**: Version 3.12 or newer.
 - **Operating Systems**: Windows 10/11, Unix/Linux Distributions.
+- **Optional encryption**: Install [age](https://github.com/FiloSottile/age) on machines running encrypted jobs or decrypting backups; no Python packages are needed.
 
 ## AWS S3 Backend Setup
 
@@ -127,6 +128,104 @@ as recorded; absolute targets still reference their original locations. Python's
 safe TAR extraction filters reject absolute or outside-directory link targets;
 restoring those requires an explicitly trusted extraction policy. Inspect the
 archive and restore into an isolated directory first.
+
+## Optional age encryption
+
+Install the standalone [age tools](https://github.com/FiloSottile/age#installation):
+for example `sudo apt install age` on Debian/Ubuntu or
+`winget install --id FiloSottile.age` on Windows. Official prebuilt binaries are
+also available. Ensure the scheduler account can find `age` on `PATH`, or
+configure its absolute executable path.
+
+Generate an identity on a trusted recovery machine:
+
+```sh
+age-keygen -o backup-identity.txt
+age-keygen -y backup-identity.txt
+```
+
+The second command prints the **public recipient**, beginning with `age1`.
+Keep the private `backup-identity.txt` separately backed up and protected; the
+backup machine only needs the public recipient. Losing the private identity
+makes the encrypted backups unrecoverable.
+
+Store the public recipient in `<config-dir>/credentials/age.json`:
+
+```json
+{
+  "recipient": "age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p",
+  "executable": "age"
+}
+```
+
+Replace the example recipient with your own. Use owner-only permissions for
+credential files on Linux (`chmod 600`) and restrict Windows ACLs, as for other
+credentials. `$ENV:VARIABLE` references use the existing credential mechanism.
+Enable encryption in a job:
+
+```json
+"encryption": {
+  "enabled": true
+}
+```
+
+Encryption defaults to disabled and supports both TAR and ZIP. Optional job-level
+`recipient` and `executable` fields override shared values. For Windows, a path
+such as `"executable": "C:\\Tools\\age\\age.exe"` avoids scheduler `PATH` issues.
+V1 accepts one native `age1...` public recipient; SSH recipients, plugins,
+passphrase mode, and multiple recipients are not exposed by this tool.
+
+Each encrypted job checks age and its recipient before fingerprinting, even if
+sources are unchanged. Missing or unusable age, bad credentials, and encryption
+failures fail only that job; other selected jobs continue and the command exits
+with status 1. Errors in optional `age.json` do not block unencrypted jobs. A job
+with its own recipient can run independently of a broken shared credential file.
+There is no plaintext upload fallback.
+
+The pipeline compresses, encrypts once, and uploads the same `.tar.gz.age` or
+`.zip.age` file to all pending destinations. Payloads are processed with bounded
+memory. Plaintext is staged in a private temporary directory and removed before
+upload; remaining plaintext, ciphertext, and partial outputs are cleaned up on
+failure. This is ordinary file removal, not secure erasure, and does not prevent
+plaintext from reaching local storage. Windows protection depends on the temp
+location's ACLs. Internal archive names and contents are encrypted; outer backup
+filenames, timestamps, and sizes remain visible.
+
+Enabling/disabling encryption or changing the effective public recipient causes
+a fresh backup. State contains only aggregate fingerprints and destination
+identities, not the key or recipient. Changing the executable path alone does
+not trigger uploads. Retention uses the same job prefix for encrypted and
+unencrypted backups; enabling encryption does not rewrite existing backups.
+
+### Decrypt and restore
+
+After downloading an encrypted backup:
+
+```sh
+python backup-tool/backup.py decrypt downloaded.tar.gz.age --identity backup-identity.txt --output restored.tar.gz
+```
+
+Use `--executable PATH` if age is not on `PATH`. This command requires no job
+configuration. It authenticates/decrypts the whole file into a temporary sibling
+and then publishes the archive without overwriting an existing output. Wrong
+keys, truncation, and tampering fail without leaving a published plaintext file.
+Atomic publication requires hard-link support in the output filesystem (Linux
+filesystems and Windows NTFS support it; FAT/exFAT do not). Choose a supported
+local filesystem; publication failure cleans the temporary file.
+
+The command does not extract archives. Inspect and extract the resulting TAR/ZIP
+with your preferred tool, respecting the symlink restore considerations above.
+You can also restore independently of this project:
+
+```sh
+age --decrypt --identity backup-identity.txt --output restored.tar.gz downloaded.tar.gz.age
+```
+
+The standalone age command has its own overwrite/output behavior; the backup
+CLI's no-overwrite and verified-publication guarantees apply to `backup.py decrypt`.
+To rotate keys, generate a new identity and update the public recipient. Keep
+all old private identities until their corresponding backups have expired, and
+verify restoration before depending on newly encrypted backups.
 
 ## Changed-source backups
 

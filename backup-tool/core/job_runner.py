@@ -1,6 +1,7 @@
 import os
 import time
-from core import logging_setup, archiver, change_detection, retention
+import tempfile
+from core import logging_setup, archiver, change_detection, retention, encryption
 from backends import BACKEND_REGISTRY
 
 def instantiate_backend(job_config, backend_config, global_creds=None):
@@ -46,9 +47,12 @@ def run_job(job_config: dict, global_creds: dict = None, state_dir: str = "confi
     change_detection_enabled = job_config.get("change_detection", {}).get("enabled", True)
     
     archive_path = None
+    encrypted_path = None
+    private_directory = None
     success = True
     
     try:
+        encryption_settings = encryption.prepare(job_config, global_creds)
         prepared_backends = []
         source_fingerprint = None
         policy_fingerprint = None
@@ -56,7 +60,7 @@ def run_job(job_config: dict, global_creds: dict = None, state_dir: str = "confi
 
         if change_detection_enabled:
             source_fingerprint = change_detection.calculate_source_fingerprint(sources, exclude_patterns, preserve_links)
-            policy_fingerprint = change_detection.calculate_policy_fingerprint(job_config)
+            policy_fingerprint = change_detection.calculate_policy_fingerprint(job_config, encryption_settings)
             state = change_detection.load_state(state_dir, job_name, logger)
 
         for b_conf in job_config.get("backends", []):
@@ -81,6 +85,12 @@ def run_job(job_config: dict, global_creds: dict = None, state_dir: str = "confi
 
         needs_archive = any(entry[4] for entry in prepared_backends)
         if needs_archive and archive_format != "none":
+            archive_options = {}
+            if encryption_settings:
+                # Protect the plaintext staging archive and avoid collisions
+                # between simultaneous encrypted runs of the same job.
+                private_directory = tempfile.TemporaryDirectory(prefix=f"backup-{job_name}-")
+                archive_options["temp_dir"] = private_directory.name
             archive_path = archiver.create_archive(
                 job_name=job_name,
                 sources=sources,
@@ -88,8 +98,14 @@ def run_job(job_config: dict, global_creds: dict = None, state_dir: str = "confi
                 compression_level=comp_level,
                 exclude_patterns=exclude_patterns,
                 preserve_directory_symlinks=preserve_links,
+                **archive_options,
             )
-            target_key = f"{job_name}/{os.path.basename(archive_path)}"
+            if encryption_settings:
+                encrypted_path = encryption.encrypt_archive(archive_path, encryption_settings)
+                os.remove(archive_path)
+                archive_path = None
+            upload_path = encrypted_path or archive_path
+            target_key = f"{job_name}/{os.path.basename(upload_path)}"
         elif needs_archive:
             logger.error("Format 'none' (flat upload) is not fully implemented yet.")
             return False
@@ -102,11 +118,11 @@ def run_job(job_config: dict, global_creds: dict = None, state_dir: str = "confi
                 backend.authenticate()
 
                 if pending:
-                    logger.info(f"[{b_type}] Upload started: {os.path.basename(archive_path)}")
+                    logger.info(f"[{b_type}] Upload started: {os.path.basename(upload_path)}")
                     b_start = time.time()
-                    backend.upload(archive_path, target_key)
+                    backend.upload(upload_path, target_key)
                     b_duration = time.time() - b_start
-                    b_size_mb = os.path.getsize(archive_path) / (1024 * 1024)
+                    b_size_mb = os.path.getsize(upload_path) / (1024 * 1024)
                     throughput = b_size_mb / b_duration if b_duration > 0 else 0
                     logger.info(f"[{b_type}] Upload completed ({b_duration:.1f}s, {throughput:.1f} MB/s)")
 
@@ -124,11 +140,22 @@ def run_job(job_config: dict, global_creds: dict = None, state_dir: str = "confi
                 success = False
 
     except Exception as e:
-        logger.error(f"Job failed during archiving: {e}")
+        logger.error(f"Job failed during backup preparation: {e}")
         success = False
     finally:
-        if archive_path and os.path.exists(archive_path):
-            os.remove(archive_path)
+        for temporary in (archive_path, encrypted_path):
+            if temporary and os.path.exists(temporary):
+                try:
+                    os.remove(temporary)
+                except OSError as error:
+                    logger.error("Could not remove temporary backup %s: %s", temporary, error)
+                    success = False
+        if private_directory is not None:
+            try:
+                private_directory.cleanup()
+            except OSError as error:
+                logger.error("Could not remove private backup staging directory: %s", error)
+                success = False
             
     total_duration = time.time() - start_time
     logger.info(f"Backup completed (Duration: {total_duration:.1f}s)")

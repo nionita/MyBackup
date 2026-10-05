@@ -39,6 +39,12 @@ def get_parser():
 
     # version parser
     subparsers.add_parser("version", help="Print the active software version of the Backup-Tool.")
+
+    decrypt_parser = subparsers.add_parser("decrypt", help="Decrypt an age backup to an archive without extracting it.")
+    decrypt_parser.add_argument("input", metavar="INPUT")
+    decrypt_parser.add_argument("--identity", required=True, metavar="PATH", help="Private age identity file.")
+    decrypt_parser.add_argument("--output", required=True, metavar="PATH", help="New archive path; must not exist.")
+    decrypt_parser.add_argument("--executable", default="age", help="age executable name or path (default: age).")
     
     # setup parser
     subparsers.add_parser("setup", help="Scaffolds a fresh configuration directory (with jobs/ folders and a global.json skeleton) at your specified --config-dir.")
@@ -76,6 +82,16 @@ def main():
     if args.command == "version":
         print(f"Backup-Tool version {VERSION}")
         sys.exit(0)
+
+    if args.command == "decrypt":
+        from core import encryption
+        try:
+            encryption.decrypt(args.input, args.identity, args.output, args.executable)
+        except (encryption.EncryptionError, OSError) as error:
+            print(f"Decryption failed: {error}", file=sys.stderr)
+            sys.exit(1)
+        print(f"Decrypted archive saved to {args.output}")
+        return
 
     try:
         global_config = config_loader.load_global_config(args.config_dir)
